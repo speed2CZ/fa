@@ -21,7 +21,7 @@
 ---@field [4] number    # w
 ---@field z number
 
----@class Vector : VectorBase
+---@class Vector : VectorBase, VectorIndex
 ---@operator add(Vector): Vector
 ---@operator mul(Quaternion): Quaternion
 ---@operator mul(Vector): Vector

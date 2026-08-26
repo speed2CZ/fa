@@ -24,6 +24,8 @@ local TableInsert = table.insert
 local TableGetn = table.getn 
 local TableRemove = table.remove 
 local TableSort = table.sort
+local MathACos = math.acos
+local MathSqrt = math.sqrt
 
 --- RandomIter(table) returns a function that when called, returns a pseudo-random element of the supplied table.
 --- Each element of the table will be returned once. This is essentially for "shuffling" sets.
@@ -1160,6 +1162,241 @@ function vector_metatable.__mul(a, b)
         a3 * b1 - a1 * b3,
         a1 * b2 - a2 * b1
     )
+end
+
+---@class VectorIndex
+local vectorIndex = {
+    --- Gets the angle between two vectors in degrees
+    ---@param from Vector
+    ---@param to Vector
+    ---@return number
+    AngleTo = function(from, to)
+        local x1, y1, z1 = from[1], from[2], from[3]
+        local x2, y2, z2 = to[1], to[2], to[3]
+        -- arccos((v1 . v2) / (|v1| |v2|))
+        local dot = x1 * x2 + y1 * y2 + z1 * z2
+        local len2 = MathSqrt((x1 * x1 + y1 * y1 + z1 * z1) * (x2 * x2 + y2 * y2 + z2 * z2))
+        return MathACos(dot / len2) * 180 / math.pi
+    end,
+    ---Computes the full angle between the two vectors in two dimensions: the `y` dimension is not taken into account.
+    ---Angle is computed in a counter clockwise direction:
+    ---if the base is to the south `({0, 0, 1})` then the direction to the east `({1, 0, 0})` is 90 degrees.
+    ---@param base Vector The base direction from which the angle will be computed in a counter clockwise fashion.
+    ---@param direction Vector The direction from which we want to compute the angle given a base.
+    ---@return number angle In degrees
+    Angle2DTo = function(base, direction)
+        local bn = base:Normalized()
+        local dn = direction:Normalized()
+
+        -- compute the orthogonal vector to determine if we need to take the inverse
+        local ort = { bn[3], 0, -bn[1] }
+
+        -- compute the radians, correct it accordingly
+        local rads = MathACos(bn[1] * dn[1] + bn[3] * dn[3])
+        if ort[1] * dn[1] + ort[3] * dn[3] < 0 then
+            rads = 2 * math.pi - rads
+        end
+
+        -- convert to degrees
+        return (180 / math.pi) * rads
+    end,
+    ---Returns the normalized vector pointing from this vector to `to`.
+    --- This is equivalent to using `(to - from):Normalized()`.
+    ---@param from Vector
+    ---@param to Vector
+    ---@returns Vector
+    DirectionTo = function(from, to)
+        if getmetatable(from) ~= getmetatable(to) then
+            error("Vector:DirectionTo: invalid argument", 2)
+        end
+        return Vector(to[1] - from[1], to[2] - from[2], to[3] - from[3]):Normalize()
+    end,
+    ---Returns a squared 3D distance between `from` and `to` vector.
+    ---
+    ---This method runs faster than `DistanceTo()`, so prefer it if you need to compare vectors or need the squared distance for some formula.
+    ---@see VectorIndex.DistanceTo
+    ---@param from Vector
+    ---@param to Vector
+    ---@return number squaredDistance
+    DistanceSquaredTo = function(from, to)
+        if getmetatable(from) ~= getmetatable(to) then
+            error("Vector:DistanceSquaredTo: invalid argument", 2)
+        end
+
+        local dx, dy = to[1] - from[1], to[2] - from[2]
+
+        if from.z then
+            local dz = to[3] - from[3]
+            return dx*dx + dy*dy + dz*dz
+        end
+
+        return dx*dx + dy*dy
+    end,
+    ---Returns a 3D distance between `from` and `to` vector.
+    ---@see VectorIndex.DistanceSquaredTo
+    ---@param from Vector
+    ---@param to Vector
+    ---@return number distance
+    DistanceTo = function(from, to)
+        if getmetatable(from) ~= getmetatable(to) then
+            error("Vector:DistanceTo: invalid argument", 2)
+        end
+
+        local dx, dy = to[1] - from[1], to[2] - from[2]
+
+        if from.z then
+            local dz = to[3] - from[3]
+            return MathSqrt(dx*dx + dy*dy + dz*dz)
+        end
+
+        return MathSqrt(dx*dx + dy*dy)
+    end,
+    ---Returns a squared 2D distance between `from` and `to` vector. `y` component is ignored.
+    ---
+    ---This method runs faster than `Distance2DTo()`, so prefer it if you need to compare vectors or need the squared distance for some formula.
+    ---@see VectorIndex.Distance2DTo
+    ---@param from Vector
+    ---@param to Vector
+    ---@return number squaredDistance
+    Distance2DSquaredTo = function(from, to)
+        if getmetatable(from) ~= getmetatable(to) then
+            error("Vector:Distance2DSquaredTo: invalid argument", 2)
+        end
+
+        local dx, dz = to[1] - from[1], to[3] - from[3]
+        return dx*dx + dz*dz
+    end,
+    ---Returns a 2D distance between `from` and `to` vector. `y` component is ignored.
+    ---@see VectorIndex.Distance2DSquaredTo
+    ---@param from Vector
+    ---@param to Vector
+    ---@return number distance
+    Distance2DTo = function(from, to)
+        if getmetatable(from) ~= getmetatable(to) then
+            error("Vector:Distance2DTo: invalid argument", 2)
+        end
+
+        local dx, dz = to[1] - from[1], to[3] - from[3]
+        return MathSqrt(dx*dx + dz*dz)
+    end,
+    ---Returns surface elevation at given position. Takes water into count.
+    ---@param vector Vector
+    ---@return number
+    GetSurfaceHeight = function(vector)
+        return GetSurfaceHeight(vector[1], vector.z or vector[2])
+    end,
+    ---Returns elevation at given position. Ignores water surface.
+    ---@param vector Vector
+    ---@return number
+    GetTerrainHeight = function(vector)
+        return GetTerrainHeight(vector[1], vector.z or vector[2])
+    end,
+    ---Checks if given `target` is in 2D `distance` from this position. `y` component is ignored.
+    ---@param vector Vector
+    ---@param target Vector
+    ---@param distance number
+    ---@return boolean
+    IsIn2DRange = function(vector, target, distance)
+        local distSquared = distance * distance
+        return vector:Distance2DSquaredTo(target) <= distSquared
+    end,
+    ---Checks if given `target` is in 3D `distance` from this position.
+    ---@param vector Vector
+    ---@param target Vector
+    ---@param distance number
+    ---@return boolean
+    IsInRange = function(vector, target, distance)
+        local distSquared = distance * distance
+        return vector:DistanceSquaredTo(target) <= distSquared
+    end,
+    ---Returns the length (magnitude) of this vector.
+    ---@param vector Vector
+    ---@return number length
+    Length = function(vector)
+        return MathSqrt(vector:LengthSquared())
+    end,
+    ---Returns the squared length (squared magnitude) of this vector.
+    ---
+    ---This method runs faster than `Length()`, so prefer it if you need to compare vectors or need the squared distance for some formula.
+    ---@see VectorIndex:Length()
+    ---@param vector Vector
+    ---@return number length
+    LengthSquared = function(vector)
+        local x, y, z = vector[1], vector[2], vector.z
+        if z then
+            return x*x + y*y + z*z
+        end
+
+        return x*x + y*y
+    end,
+    ---Sets the vector to unit length.
+    ---@see VectorIndex.Normalized
+    ---@param vector Vector
+    ---@return Vector self
+    Normalize = function(vector)
+        local x, y, z = vector[1], vector[2], vector.z
+        local length = vector:Length()
+
+        if length > 0 then
+            local invlength = 1 / length
+            vector[1] = x * invlength
+            vector[2] = y * invlength
+            if vector.z then
+                vector[3] = z * invlength
+            end
+        else
+            vector[1] = 0
+            vector[2] = 0
+            if vector.z then
+                vector[3] = 0
+            end
+        end
+        return vector
+    end,
+    ---Returns the vector with the same direction, but unit length.
+    ---@param vector Vector
+    ---@return Vector
+    Normalized = function(vector)
+        local x, y, z = vector[1], vector[2], vector.z
+        local length = vector:Length()
+
+        if length > 0 then
+            local invlength = 1 / length
+            if z then
+                return Vector(x * invlength, y * invlength, z * invlength)
+            else
+                ---@diagnostic disable-next-line: return-type-mismatch
+                return Vector2(x * invlength, y * invlength)
+            end
+        end
+
+        if z then
+            return Vector(0, 0, 0)
+        end
+
+        ---@diagnostic disable-next-line: return-type-mismatch
+        return Vector2(0, 0)
+    end,
+}
+
+local oldIndex = vector_metatable.__index
+vector_metatable.__index = function(self, key)
+    return vectorIndex[key] or oldIndex(self, key)
+end
+
+local olderNewIndex = vector_metatable.__newindex
+vector_metatable.__newindex = function(vector, k, v)
+    if k == "x" then
+        vector[1] = k
+        return
+    elseif k == "y" then
+        vector[2] = k
+        return
+    elseif k == "z" then
+        vector[3] = k
+        return
+    end
+    olderNewIndex(vector, k, v)
 end
 
 -- ==========================================================================================
