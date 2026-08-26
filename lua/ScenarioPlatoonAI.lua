@@ -6,6 +6,7 @@
 ------------------------------------------------------------------------
 
 local AIBuildStructures = import("/lua/ai/aibuildstructures.lua")
+local FormationCommands = import("/lua/sim/formationcommands.lua")
 local ScenarioFramework = import("/lua/scenarioframework.lua")
 local StructureTemplates = import("/lua/buildingtemplates.lua")
 local ScenarioUtils = import("/lua/sim/scenarioutilities.lua")
@@ -411,6 +412,59 @@ function MoveToThread(platoon)
     else
         error('*SCENARIO PLATOON AI ERROR: PlatoonData not defined', 2)
     end
+end
+
+--- Similar to the `PatrolThread` but uses `IssueFormMove` command instead, re-issuing the commands
+--- each time the platoon reaches the end of the route.
+---
+--- Usefull for platoons with Harbingers or other units that get easily distracted while patrolling.
+---
+--- Since the platoon in moving and not patrolling, the units don't stop at their max range for attacking.
+--- - PatrolRoute - List of locations to patrol
+--- - PatrolChain - Chain of locations to patrol
+---@param platoon Platoon
+function MovePatrolThread(platoon)
+    local data = platoon.PlatoonData
+    local brain = platoon:GetBrain()
+
+    platoon:Stop()
+
+    if not data then
+        error('*SCENARIO PLATOON AI ERROR: PlatoonData not defined', 2)
+    elseif not (data.PatrolRoute or data.PatrolChain) then
+        error('*SCENARIO PLATOON AI ERROR: PatrolRoute or PatrolChain not defined', 2)
+    end
+
+    local positions = {}
+    if data.PatrolChain then
+        positions = ScenarioUtils.ChainToPositions(data.PatrolChain)
+    else
+        for _, v in ipairs(data.PatrolRoute) do
+            if type(v) == 'string' then
+                table.insert(ScenarioUtils.MarkerToPosition(v))
+            else
+                table.insert(positions, v)
+            end
+        end
+    end
+
+    local formation = data.OverrideFormation or data.UseFormation or 'AttackFormation'
+    local angles = FormationCommands.GetAnglesForRoute(positions)
+
+    local commands = {}
+    repeat
+        local num = table.getn(commands)
+        if num < 2 or IsCommandDone(commands[num - 1]) then
+            table.clear(commands)
+
+            local units = platoon:GetPlatoonUnits()
+            for i, pos in ipairs(positions) do
+                table.insert(commands, IssueFormMove(units, pos, formation, angles[i]))
+            end
+        end
+
+        WaitSeconds(3)
+    until not brain:PlatoonExists(platoon)
 end
 
 --- Platoon patrols a set of locations
