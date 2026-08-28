@@ -129,7 +129,7 @@ local function getHumanArmies()
         for _, brain in pairs(ArmyBrains) do
             -- In campaign, if an AI mod is being used to provide an AI 'player', then this should also be included
             -- otherwise it can render some missions impossible to complete
-            if brain.Human or (isCoop and StringStarts(brain.Name, "Player")) then
+            if brain.Human or (isCoop and string.startsWith(brain.Name, "Player")) then
                 humanArmies[brain.Army] = brain
             end
         end
