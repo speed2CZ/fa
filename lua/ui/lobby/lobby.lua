@@ -277,16 +277,16 @@ local commands = {
 local Strings = LobbyComm.Strings
 
 ---@type UILobbyCommunication
-local lobbyComm = false
+local lobbyComm
 local localPlayerName = ""
 local gameName = ""
-local hostID = false
+local hostID
 local singlePlayer = false
 ---@type Group
-local GUI = false
-local localPlayerID = false
+local GUI
+local localPlayerID
 ---@type GameData | WatchedGameData
-local gameInfo = false
+local gameInfo
 local lastKickMessage = UTF.UnescapeString(Prefs.GetFromCurrentProfile('lastKickMessage') or "")
 
 local defaultMode =(HasCommandLineArg("/windowed") and "windowed") or Prefs.GetFromCurrentProfile('options').primary_adapter
@@ -690,13 +690,13 @@ end
 
 
 function Reset()
-    lobbyComm = false
+    lobbyComm = nil
     localPlayerName = ""
     gameName = ""
-    hostID = false
+    hostID = nil
     singlePlayer = false
-    GUI = false
-    localPlayerID = false
+    GUI = nil
+    localPlayerID = nil
     availableMods = {}
     selectedUIMods = Mods.GetSelectedUIMods()
     selectedSimMods = Mods.GetSelectedSimMods()
@@ -1636,7 +1636,7 @@ local function AssignRandomStartSpots()
         return
     end
 
-    function teamsAddSpot(teams, team, spot)
+    local function teamsAddSpot(teams, team, spot)
         if not teams[team] then
             teams[team] = {}
         end
@@ -1644,7 +1644,7 @@ local function AssignRandomStartSpots()
     end
 
     -- rearrange players according to the provided setup
-    function rearrangePlayers(data)
+    local function rearrangePlayers(data)
         gameInfo.GameOptions['Quality'] = data.quality
 
         -- Copy a reference to each of the PlayerData objects indexed by their original slots.
@@ -1658,7 +1658,7 @@ local function AssignRandomStartSpots()
             local rating_cmp = function(a,b) return a.rating > b.rating end
             local slot_cmp = function(a,b) return a.slot < b.slot end
 
-            function getMasterOrder(sortedSlots)
+            local function getMasterOrder(sortedSlots)
                 local masterOrder = {}
 
                 local slot2nr = {}
@@ -1673,7 +1673,7 @@ local function AssignRandomStartSpots()
                 return masterOrder
             end
 
-            function teamsSameSize(slots)
+            local function teamsSameSize(slots)
                 local size
 
                 for t, sorted in slots do
@@ -1686,7 +1686,7 @@ local function AssignRandomStartSpots()
                 return true
             end
 
-            function reorderSlots(sortedSlots, masterOrder)
+            local function reorderSlots(sortedSlots, masterOrder)
                 local newSlots = {}
                 for i, j in masterOrder do
                     table.insert(newSlots, sortedSlots.byNr[j].slot)
@@ -1814,6 +1814,7 @@ local function AssignRandomStartSpots()
         end
     end
 
+    local s, q
     if teamSpawn == 'random' or teamSpawn == 'random_reveal' then
         s = autobalance_random(ratingTable, teams)
         q = autobalance_quality(s)
@@ -1832,7 +1833,6 @@ local function AssignRandomStartSpots()
     }
 
     local cmp = function(a, b) return a.quality > b.quality end
-    local s, q
     for fname, f in functions do
         s = f(ratingTable, teams)
         if s then
@@ -1859,7 +1859,7 @@ local function AssignRandomStartSpots()
         setups = table.shuffle(setups)
     end
 
-    best = table.remove(setups, 1)
+    local best = table.remove(setups, 1)
     rearrangePlayers(best)
 end
 

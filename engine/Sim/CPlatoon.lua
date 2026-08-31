@@ -6,7 +6,7 @@
 ---@class moho.platoon_methods : InternalObject
 local CPlatoon = {}
 
----@alias PlatoonSquadType 'Attack' | 'Artillery' | 'Guard' | 'None' | 'Scout' | 'Support'
+---@alias PlatoonSquadType 'Attack' | 'Artillery' | 'Guard' | 'None' | 'Scout' | 'Support' | 'Unassigned'
 
 
 --- Orders platoon to attack target unit.
@@ -110,7 +110,7 @@ end
 --- Finds prioritized unit to attack for squad.
 -- Uses priorities set by SetPrioritizedTargetList function.
 -- Used for TMLs to find a pick a target in their range
----@see `SetPrioritizedTargetList`
+---@see moho.platoon_methods.SetPrioritizedTargetList
 ---@param squad PlatoonSquadType
 ---@param alliance AllianceType
 ---@param canAttack boolean true/false if the squad has to be able to attack the unit.

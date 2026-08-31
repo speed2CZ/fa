@@ -4,7 +4,7 @@
 local CAiBrain = {}
 
 ---@alias BrainArcType 'high' | 'low' | 'none'
----@alias BrainThreatType 'Overall' | 'OverallNotAssigned' | 'StructuresNotMex' | 'Structures' | 'Naval' | 'Air' | 'Land' | 'Experimental' | 'Commander' | 'Artillery' | 'AntiAir' | 'AntiSurface' | 'AntiSub' | 'Economy' | 'Unknown'
+---@alias BrainThreatType 'Overall' | 'OverallNotAssigned' | 'StructuresNotMex' | 'Surface' | 'Structures' | 'Naval' | 'Air' | 'Land' | 'Experimental' | 'Commander' | 'Artillery' | 'AntiAir' | 'AntiSurface' | 'AntiSub' | 'Economy' | 'Unknown'
 
 ---@class BrainPositionThreat
 ---@field [1] number x
@@ -22,7 +22,7 @@ local CAiBrain = {}
 ---@param position Vector
 ---@param threat number
 ---@param decay number
----@param threatType BrainThreatType
+---@param threatType? BrainThreatType
 function CAiBrain:AssignThreatAtPosition(position, threat, decay, threatType)
 end
 
@@ -184,6 +184,8 @@ end
 -- return x, z
 
 --- Returns the army start position
+--- 
+---@see SetArmyStart
 ---@return number Xcoordinate
 ---@return number Zcoordinate
 function CAiBrain:GetArmyStartPos()
@@ -218,15 +220,15 @@ end
 function CAiBrain:GetArmyStat(statName, defaultValue)
 end
 
----@unknown
+---@return table
 function CAiBrain:GetAttackVectors()
 end
 
---- Returns a list of factories at a location
----@param location? table table with location, it's not a position but location created by PBMAddBuildLocation function
+--- Returns a list of factories, optionally filtered by distance from `positoin`.
+---@param position? Vector
 ---@param radius? number
 ---@return FactoryUnit[]
-function CAiBrain:GetAvailableFactories(location, radius)
+function CAiBrain:GetAvailableFactories(position, radius)
 end
 
 ---@alias AIBrainBlueprintStatUnits
@@ -256,7 +258,7 @@ function CAiBrain:GetBlueprintStat(statName, category)
 end
 
 --- Return this brain's current enemy.
----@return number -- target army's number
+---@return AIBrain? -- target army brain
 function CAiBrain:GetCurrentEnemy()
 end
 
@@ -306,7 +308,7 @@ end
 
 --- Returns the faction of the army represented by this brain.
 -- 1 UEF, 2 Aeon, 3 Cybran, 4 Seraphim. 5 custom faction like Nomads
----@return number
+---@return integer
 function CAiBrain:GetFactionIndex()
 end
 
@@ -333,7 +335,7 @@ end
 --- This function does **not** take into account intel.
 ---@param category EntityCategory
 ---@param needToBeIdle boolean
----@param requireBuilt boolean Appears to be not functional
+---@param requireBuilt? boolean Appears to be not functional
 ---@return Unit[]
 function CAiBrain:GetListOfUnits(category, needToBeIdle, requireBuilt)
 end
@@ -514,8 +516,8 @@ function CAiBrain:SetArmyStatsTrigger(statName, triggerName, compareType, value,
 end
 
 --- Set the current enemy for this brain to attack.
----@param armyIndex Army
-function CAiBrain:SetCurrentEnemy(armyIndex)
+---@param aiBrain AIBrain
+function CAiBrain:SetCurrentEnemy(aiBrain)
 end
 
 --- Set the current plan for this brain to run.
@@ -533,6 +535,7 @@ function CAiBrain:SetResourceSharing(bool)
 end
 
 --- TODO.
+---@param category? EntityCategory
 function CAiBrain:SetUpAttackVectorsToArmy(category)
 end
 

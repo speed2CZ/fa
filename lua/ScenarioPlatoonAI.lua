@@ -204,7 +204,7 @@ end
 --- - MoveChain - Chain of locations to move
 ---@param platoon Platoon
 function TransportPool(platoon)
-    local aiBrain = platoon:GetBrain()
+    local aiBrain = platoon:GetBrain()--[[@as CampaignAIBrain]]
     local data = platoon.PlatoonData
 
     -- Default transport platoon to grab from
@@ -327,7 +327,7 @@ function LandAssaultWithTransports(platoon)
         return
     end
 
-    if not ReadyWaitVariables(data) then
+    if not ReadyWaitVariables(data, aiBrain, platoon) then
         return
     end
 
@@ -590,11 +590,13 @@ function EngineersBuildPlatoon(platoon)
     local platoonUnits = platoon:GetPlatoonUnits()
     local data = platoon.PlatoonData
     local platoonName = data.PlatoonName
-    local eng = false
+    ---@type ConstructionUnit|nil
+    local eng
     local engTable = {}
     local buildingPlatoon = false
     local buildingData
-    local unitBeingBuilt = false
+    ---@type Unit|nil
+    local unitBeingBuilt
     local busy = false
     local buildingTemplate = StructureTemplates.BuildingTemplates[aiBrain:GetFactionIndex()]
 
@@ -606,7 +608,7 @@ function EngineersBuildPlatoon(platoon)
     for _, v in platoonUnits do
         if EntityCategoryContains(categories.CONSTRUCTION, v) then
             if not eng then
-                eng = v
+                eng = v--[[@as ConstructionUnit]]
             else
                 table.insert(engTable, v)
             end
@@ -678,7 +680,7 @@ function EngineersBuildPlatoon(platoon)
                     IssueStop({eng})
                     IssueToUnitClearCommands(eng)
                     local result = aiBrain:BuildStructure(eng, tblData.type, {tblData.Position[1], tblData.Position[3], 0}, false)
-                    unitBeingBuilt = false
+                    unitBeingBuilt = nil
 
                     repeat
                         WaitSeconds(5)
@@ -697,11 +699,12 @@ function EngineersBuildPlatoon(platoon)
                         plat = aiBrain:MakePlatoon('', '')
                         aiBrain.EngBuiltPlatoonList[buildingPlatoon] = plat
                         plat.EngBuildName = buildingPlatoon
-                        plat:AddDestroyCallback(function(aiBrain, plat)
-                            aiBrain.EngBuiltPlatoonList[plat.EngBuildName] = false
+                        plat:AddDestroyCallback(function(cbBrain, cbPlatoon)
+                            cbBrain.EngBuiltPlatoonList[cbPlatoon.EngBuildName] = false
                         end
                        )
                     end
+                    ---@cast unitBeingBuilt -nil
                     aiBrain:AssignUnitToPlatoon(aiBrain.EngBuiltPlatoonList[buildingPlatoon], unitBeingBuilt, 'Attack', 'NoFormation')
                 end
             end
@@ -721,7 +724,7 @@ function EngineersBuildPlatoon(platoon)
                 elseif buildingData.PlatoonAI then
                     plat:ForkAIThread(import("/lua/platoon.lua")[buildingData.PlatoonAI])
                 elseif buildingData.LocalFunction and buildingData.ScenName then
-                    plat:ForkAIThread(import('/maps/'..buildingData.ScenName..'/'..buildingData.ScenName..'_script.lua')[LocalFunction])
+                    plat:ForkAIThread(import('/maps/'..buildingData.ScenName..'/'..buildingData.ScenName..'_script.lua')[buildingData.LocalFunction])
                 end
             end
             newPlatoonUnits = {}
@@ -731,6 +734,7 @@ function EngineersBuildPlatoon(platoon)
                 aiBrain:DisbandPlatoon(platoon)
             end
         end
+        ---@cast eng -nil
         if not eng:IsUnitState('Patrolling') and data.PatrolChain then
             for _, v in ScenarioUtils.ChainToPositions(data.PatrolChain) do
                 platoon:Patrol(v)
@@ -752,7 +756,7 @@ function CategoryHunterPlatoonAI(platoon)
         -- Find nearest enemy category to this platoon
         -- Cheat to find the focus army's units
         local newTarget
-        local platPos = platoon:GetPlatoonPosition()
+        local platPos = platoon:GetPlatoonPosition()--[[@as Vector]]
         local enemies = table.shuffle(GetHumanEnemies(aiBrain:GetArmyIndex()))
         for i, enemy in enemies do
             for catNum, category in platoon.PlatoonData.CategoryList do
@@ -841,7 +845,7 @@ end
 --- - patrol using PatrolRoute, platoon can disband if given a patrol and is not maintaining a base
 ---@param platoon Platoon
 function StartBaseEngineerThread(platoon)
-    local aiBrain = platoon:GetBrain()
+    local aiBrain = platoon:GetBrain()--[[@as CampaignAIBrain]]
     local platoonUnits = platoon:GetPlatoonUnits()
     local data = platoon.PlatoonData
     local baseName
@@ -876,7 +880,8 @@ function StartBaseEngineerThread(platoon)
             end
         end
     end
-    local eng = false
+    ---@type ConstructionUnit|nil
+    local eng
     local engTable = {}
     local cmd
     local unitBeingBuilt
@@ -885,7 +890,7 @@ function StartBaseEngineerThread(platoon)
     for _, v in platoonUnits do
         if EntityCategoryContains(categories.CONSTRUCTION, v) then
             if not eng then
-                eng = v
+                eng = v--[[@as ConstructionUnit]]
             else
                 table.insert(engTable, v)
             end
@@ -911,7 +916,7 @@ function StartBaseEngineerThread(platoon)
     end
 
     -- Set Ready and hold for Wait variable
-    if not ReadyWaitVariables(data) then
+    if not ReadyWaitVariables(data, aiBrain, platoon) then
         return
     end
 
@@ -1006,6 +1011,7 @@ function StartBaseTransports(platoon, data, aiBrain)
             end
         end
 
+        local cmd
         -- Unload transports
         if type(data.LandingLocation) == 'string' then
             cmd = platoon:UnloadAllAtLocation(ScenarioUtils.MarkerToPosition(data.LandingLocation))
@@ -1032,7 +1038,7 @@ function StartBaseTransports(platoon, data, aiBrain)
                 return false
             end
         end
-        cmd = platoon:UseFerryBeacon(categories.ALLUNITS, ScenarioInfo.VarTable[data.MoveBeacon])
+        local cmd = platoon:UseFerryBeacon(categories.ALLUNITS, ScenarioInfo.VarTable[data.MoveBeacon])
         while platoon:IsCommandsActive(cmd) do
             WaitSeconds(3)
             if not aiBrain:PlatoonExists(platoon) then
@@ -1050,7 +1056,7 @@ end
 ---@param data table
 function ReturnTransportsToPool(platoon, data)
     -- Put transports back in TPool
-    local aiBrain = platoon:GetBrain()
+    local aiBrain = platoon:GetBrain()--[[@as CampaignAIBrain]]
     local transports = platoon:GetSquadUnits('Scout')
 
     -- Default transport platoon to grab from
@@ -1103,7 +1109,7 @@ end
 
 --- Utility Function
 --- Uses UnitBuild block to build specific units on the map using StartBaseEngineer
----@param eng EngineerBuilder
+---@param eng ConstructionUnit
 ---@param engTable table
 ---@param data table
 ---@param aiBrain AIBrain
@@ -1237,7 +1243,7 @@ end
 ---@param eng ConstructionUnit
 ---@param engTable table
 ---@param data table
----@param aiBrain AIBrain
+---@param aiBrain CampaignAIBrain
 ---@return boolean
 function StartBaseBuildBase(eng, engTable, data, aiBrain)
     local unitBeingBuilt
@@ -1283,10 +1289,10 @@ end
 --- Utility Function
 --- Maintains a base for engs using StartBaseEngineer
 ---@param platoon Platoon
----@param eng ConstructionUnit
----@param engTable table
+---@param eng? ConstructionUnit
+---@param engTable? ConstructionUnit[]
 ---@param data table
----@param aiBrain AIBrain
+---@param aiBrain CampaignAIBrain
 ---@return boolean
 function StartBaseMaintainBase(platoon, eng, engTable, data, aiBrain)
     local unitBeingBuilt
@@ -1301,6 +1307,8 @@ function StartBaseMaintainBase(platoon, eng, engTable, data, aiBrain)
             return false
         end
     end
+    ---@cast eng -nil
+    ---@cast engTable -nil
     while data.MaintainBaseTemplate do
         local busy = false
         if eng and not eng.Dead then
@@ -1402,10 +1410,10 @@ end
 --- Utility Function
 --- Resets main engineer and engTablef or StartBaseEngineer
 ---@param eng ConstructionUnit
----@param engTable table
----@param unitBeingBuilt Unit
----@return ConstructionUnit|false
----@return table
+---@param engTable? ConstructionUnit[]
+---@param unitBeingBuilt? Unit
+---@return ConstructionUnit?
+---@return ConstructionUnit[]?
 function AssistOtherEngineer(eng, engTable, unitBeingBuilt)
     if engTable and not table.empty(engTable) then
         for num, unit in engTable do
@@ -1421,7 +1429,7 @@ function AssistOtherEngineer(eng, engTable, unitBeingBuilt)
             end
         end
         if eng.Dead then
-            return false
+            return
         end
     end
     return eng, engTable
@@ -1431,8 +1439,8 @@ end
 --- Has an engineer build a certain type of structure using a base template
 ---@param aiBrain AIBrain
 ---@param builder Unit
----@param building StructureUnit
----@param brainBaseTemplate any
+---@param building string
+---@param brainBaseTemplate BmBaseTemplates
 ---@param buildingTemplate any
 ---@return boolean
 function EngineerBuildStructure(aiBrain, builder, building, brainBaseTemplate, buildingTemplate)
@@ -1778,8 +1786,10 @@ end
 --- Utility Function
 --- Set Ready Variable and wait for Wait Variable if given
 ---@param data table
+---@param aiBrain AIBrain
+---@param platoon Platoon
 ---@return boolean
-function ReadyWaitVariables(data)
+function ReadyWaitVariables(data, aiBrain, platoon)
     -- Set ready and check wait variable after upgraded and/or loaded on transport
     -- Just prior to moving the unit
     if data.ReadyVariable then
@@ -1814,7 +1824,7 @@ function GetLoadTransports(platoon)
     local transportTable = {}
     local transSlotTable = {}
 
-    local scoutUnits = platoon:GetSquadUnits('scout') or {}
+    local scoutUnits = platoon:GetSquadUnits('Scout') or {}
 
     for num, unit in scoutUnits do
         local id = unit.UnitId
@@ -1992,7 +2002,7 @@ end
 
 --- Utility function
 --- Generates a random patrol route for RandomPatrolThread
----@param patrol CommandCap
+---@param patrol Vector[]
 ---@return table
 function GetRandomPatrolRoute(patrol)
     local randPatrol = {}
@@ -2017,7 +2027,7 @@ end
 ---@param aiBrain AIBrain
 ---@param locationList Vector[]
 ---@param ringSize number
----@param location Vector
+---@param location? Vector
 ---@return Vector
 function PlatoonChooseLowestNonNegative(aiBrain, locationList, ringSize, location)
     local bestLocation = {}
@@ -2077,9 +2087,9 @@ end
 --- Utility Function
 --- Returns location with the highest threat
 ---@param aiBrain AIBrain
----@param locationList string[]
+---@param locationList Vector[]
 ---@param ringSize number
----@param location Vector[]
+---@param location? Vector
 ---@return Vector
 function PlatoonChooseHighest(aiBrain, locationList, ringSize, location)
     local bestLocation = locationList[1]
@@ -2179,7 +2189,7 @@ end
 --- Function that gets the correct number of transports for a platoon
 --- If BaseName platoon data is specified, grabs transports from that platoon
 ---@param platoon Platoon
----@return number
+---@return number?
 function GetTransportsThread(platoon)
     local data = platoon.PlatoonData
     local aiBrain = platoon:GetBrain()
@@ -2315,7 +2325,7 @@ function GetTransportsThread(platoon)
             if transportsNeeded then
                 WaitSeconds(7)
                 if not aiBrain:PlatoonExists(platoon) then
-                    return false
+                    return
                 end
                 local unitFound = false
                 for _, unit in platoon:GetPlatoonUnits() do
@@ -2326,7 +2336,7 @@ function GetTransportsThread(platoon)
                 end
                 if not unitFound then
                     ReturnTransportsToPool(platoon, data)
-                    return false
+                    return
                 end
             end
         end
