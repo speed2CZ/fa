@@ -2136,7 +2136,7 @@ local function operationNISCameraThread(unitInfo, camInfo)
 end
 
 --- NIS Garbage
----@param unit UnitInfo | Unit
+---@param unit UnitInfo | Unit | Vector
 ---@param camInfo CamInfo
 function OperationNISCamera(unit, camInfo)
     if camInfo.markerCam then

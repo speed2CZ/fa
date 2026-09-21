@@ -40,9 +40,15 @@ end
 function DefaultOSBasePatrol(platoon)
     local aiBrain = platoon:GetBrain()
     local master = string.sub(platoon.PlatoonData.BuilderName, 11)
+    --LOG(master or "NO MASTER")
+    --LOG(repr(platoon.PlatoonData or {}))
     local chain
-    if platoon.PlatoonData.LocationType and Scenario.Chains[aiBrain.Name .. '_' .. platoon.PlatoonData.LocationType .. '_BasePatrolChain'] then
-        chain = aiBrain.Name .. '_' .. platoon.PlatoonData.LocationType .. '_BasePatrolChain'
+    local location = platoon.PlatoonData.LocationType
+    --LOG("Looking for chain: ", aiBrain.Name .. '_' .. location .. '_BasePatrolChain')
+    --LOG("Looking for chain: ", master .. '_BasePatrolChain')
+    --LOG("Looking for chain: ", aiBrain.Name .. '_BasePatrolChain')
+    if location and Scenario.Chains[aiBrain.Name .. '_' .. location .. '_BasePatrolChain'] then
+        chain = aiBrain.Name .. '_' .. location .. '_BasePatrolChain'
     elseif Scenario.Chains[master .. '_BasePatrolChain'] then
         chain = master .. '_BasePatrolChain'
     elseif Scenario.Chains[aiBrain.Name .. '_BasePatrolChain'] then
@@ -51,6 +57,8 @@ function DefaultOSBasePatrol(platoon)
     if chain then
         platoon.PlatoonData.PatrolChain = chain
         PatrolThread(platoon)
+    --else
+    --    WARN("DefaultOSBasePatrol chain not found: ", master)
     end
 end
 
@@ -2519,6 +2527,172 @@ function PlatoonEnableStealth(platoon)
     end
 end
 
+---@param data? ChainName|(MarkerName|Vector)[]
+---@return Vector[]
+local function chainOrRouteToPositions(data)
+    if not data then return {} end
+
+    if type(data) == "string" then
+        return ScenarioUtils.ChainToPositions(data)
+    end
+
+    ---@type Vector[]
+    local positions = {}
+    for _, v in ipairs(data) do
+        if type(v) == 'string' then
+            table.insert(positions, ScenarioUtils.MarkerToPosition(v))
+        else
+            table.insert(positions, v)
+        end
+    end
+
+    return positions
+end
+
+---@class CarrierAILocationData
+---@field Name string
+---@field Position MarkerName|Vector
+---@field Radius integer
+---@field Rally? MarkerName|Vector Rally position for the carriers to unload units. Defaults to `Position`
+
+---If neither `WaitChain` or `WaitRoute` is provided. The carrier will be moved to the location position instead.
+---@class CarrierAIPlatoonData
+---@field PBMLocation CarrierAILocationData PlatoonBuildManager location to create
+---@field MoveChain? ChainName Carrier will first move using this chain. Alternative to `MoveRoute`
+---@field MoveRoute? (MarkerName|Vector)[] Carrier will first move using this route. Alternative to `MoveChain`
+---Positions where the carrier will sit and produce units. The carriers will split, each move to one node of this path.
+---These positions should be withint the range of the build location. Alternative to `MoveRoute`
+---@field WaitChain? ChainName
+---Positions where the carrier will sit and produce units. The carriers will split, each move to one node of this path.
+---These positions should be withint the range of the build location. Alternative to `MoveChain`
+---@field WaitRoute? (MarkerName|Vector)[]
+
+---Manages a platoon of Carriers, crates a new build location and produces platoons.
+---
+---@see CarrierAIPlatoonData for required data
+---@param platoon Platoon
+function CarrierAI(platoon)
+    --if platoon:IsPatrolling()
+        platoon:Stop()
+    --end
+
+    ---@type CarrierAIPlatoonData
+    local data = platoon.PlatoonData
+    local units = platoon:GetPlatoonUnits()
+    local aiBrain = platoon:GetBrain()--[[@as CampaignAIBrain]]
+    local locationData = data.PBMLocation
+
+    -- Move to the desired position
+    local positions = chainOrRouteToPositions(data.MoveChain or data.MoveRoute)
+    if not table.empty(positions) then
+        ScenarioFramework.PlatoonMoveRoute(platoon, positions)
+    end
+
+    -- This is where we want the carrier to park and produce units
+    positions = chainOrRouteToPositions(data.WaitChain or data.WaitRoute)
+    if table.empty(positions) then
+        local pos = locationData.Position
+        if type(pos) == "string" then
+            table.insert(positions, ScenarioUtils.MarkerToPosition(pos))
+        else
+            table.insert(positions, pos)
+        end
+    end
+
+    -- Split the carriers among the provided positions
+    local i = 1
+    for _, unit in pairs(units) do
+        if not positions[i] then
+            i = 1
+        end
+        IssueToUnitMove(unit, positions[i])
+        i = i + 1
+    end
+
+    -- Wait for all units to reach their position
+    local allIdle = false
+    repeat
+        WaitSeconds(3)
+        allIdle = true
+        for _, unit in pairs(units) do
+            if not unit.Dead and not unit:IsIdleState() then
+                allIdle = false
+                break
+            end
+        end
+    until allIdle
+
+    if not aiBrain:PlatoonExists(platoon) then return end
+    -- Get or create the build location
+
+    local location = aiBrain:PBMGetLocation(locationData.Name)
+    if not location then
+        aiBrain:PBMAddBuildLocation(locationData.Position, locationData.Radius, locationData.Name)
+        location = aiBrain:PBMGetLocation(locationData.Name)
+    end
+    ---@cast location -nil
+    -- Set primary factory if needed, guard with others and start unloading units.
+
+    local rally = locationData.Rally or locationData.Position
+    if type(rally) == "string" then
+        rally = ScenarioUtils.MarkerToPosition(rally)
+    end
+
+    local primaryFactory = location.PrimaryFactories.Air
+    local assisters = {}
+
+    for _, unit in pairs(units) do
+        local factory = unit.ExternalFactory--[[@as ExternalFactoryUnit]]
+        if not factory then continue end
+
+        unit:ForkThread(CarrierUnloadThread, rally)
+
+        if not primaryFactory or primaryFactory.Dead then
+            location.PrimaryFactories.Air = factory--[[@as FactoryUnit]]
+            primaryFactory = factory--[[@as FactoryUnit]]
+        else
+            table.insert(assisters, factory)
+        end
+    end
+
+    if table.empty(assisters) or not primaryFactory then return end
+    IssueFactoryAssist(assisters, primaryFactory)
+end
+
+---@param carrier AircraftCarrier
+---@param factory ExternalFactoryUnit
+---@return boolean
+local function canCarrierUnloadUnits(carrier, factory)
+    local primaryfactory = factory:GetGuardedUnit()--[[@as ExternalFactoryUnit?]]
+    -- We have cargo and nothing to build and if we're assisting other factory, that one has also nothing in queue.
+    return table.getn(carrier:GetCargo()) > 0
+        and not factory:IsUnitState('Building')
+        and factory:GetNumBuildOrders(categories.ALLUNITS) == 0
+        and (not primaryfactory or (
+            not primaryfactory:IsUnitState('Building')
+            and primaryfactory:GetNumBuildOrders(categories.ALLUNITS) == 0))
+end
+
+---Unloads the carrier units at `position` when the factory is done building.
+---@param carrier AircraftCarrier
+---@param position? Vector If not provided, uses carrier's curret position
+function CarrierUnloadThread(carrier, position)
+    local factory = carrier.ExternalFactory--[[@as ExternalFactoryUnit]]
+    local carrierUnits = {carrier}
+
+    repeat
+        if canCarrierUnloadUnits(carrier, factory) then
+            IssueToUnitClearCommands(carrier)
+            IssueTransportUnload(carrierUnits, position or carrier:GetPosition())
+
+            repeat
+            WaitSeconds(3)
+            until not carrier:IsUnitState("TransportUnloading")
+        end
+
+        WaitSeconds(1)
+    until carrier.Dead
+end
 
 -- kept for mod backwards compatibility
 

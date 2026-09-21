@@ -315,7 +315,7 @@ function CreateScalableUnitExplosion(unit, debrisMultiplier, circularDebris)
             end    
 
             -- create the flash
-            CreateLightParticle(
+            CreateLightParticleIntel(
                 unit, 
                 -1, 
                 army, 
@@ -394,7 +394,7 @@ function CreateDefaultHitExplosion(obj, scale)
         local army = obj.Army
 
         -- create the flash
-        CreateLightParticle(
+        CreateLightParticleIntel(
             obj,
             -1,
             army,
