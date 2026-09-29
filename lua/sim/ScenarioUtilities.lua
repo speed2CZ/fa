@@ -856,6 +856,7 @@ function InitializeScenarioArmies()
                 if setup.Human or StringStarts(strArmy, "Player") then
                     local factionIndex = MathClamp(setup.Faction, 1, factionCount)
                     SetArmyFactionIndex(strArmy, factionIndex - 1)
+                    brain:SetCurrentPlan()
                 else
                     local factionIndex = MathClamp(faction, 0, factionCount)
                     SetArmyFactionIndex(strArmy, factionIndex)
