@@ -72,7 +72,7 @@ AIBrain = Class(StandardBrain) {
     SkirmishSystems = true,
 
     --- Called after `SetupSession` but before `BeginSession` - no initial units, props or resources exist at this point
-    ---@param self AIBrain
+    ---@param self BaseAIBrain
     ---@param planName string
     OnCreateAI = function(self, planName)
         StandardBrain.OnCreateAI(self, planName)
@@ -105,7 +105,7 @@ AIBrain = Class(StandardBrain) {
     end,
 
     --- Called after `SetupSession` but before `BeginSession` - no initial units, props or resources exist at this point
-    ---@param self AIBrain
+    ---@param self BaseAIBrain
     ---@param planName string
     CreateBrainShared = function(self, planName)
         StandardBrain.CreateBrainShared(self, planName)
@@ -123,7 +123,7 @@ AIBrain = Class(StandardBrain) {
     end,
 
     --- Called after `BeginSession`, at this point all props, resources and initial units exist in the map
-    ---@param self AIBrain
+    ---@param self BaseAIBrain
     OnBeginSession = function(self)
         StandardBrain.OnBeginSession(self)
 
@@ -1537,7 +1537,7 @@ AIBrain = Class(StandardBrain) {
         end
     end,
 
-    ---@param self AIBrain
+    ---@param self BaseAIBrain
     ---@return CommandUnit | nil
     GetCommander = function(self)
         local cdr = self.CDR

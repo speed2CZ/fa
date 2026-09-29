@@ -286,7 +286,7 @@ end
 
 --- Returns the number of units of the given categories
 ---@param category EntityCategory
----@return number
+---@return integer
 function CAiBrain:GetCurrentUnits(category)
 end
 
